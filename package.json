@@ -1,0 +1,35 @@
+{
+  "name": "mongo2influx",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "serve": "npm run build && node dist/index.js",
+    "debug": "ts-node ./src/index.ts",
+    "clean": "rmdir /s /q node_modules",
+    "reinstall": "npm run clean && npm install",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mongo",
+    "influx",
+    "migration",
+    "convert"
+  ],
+  "author": "DONGHWAN, KIM",
+  "license": "ISC",
+  "dependencies": {
+    "influx": "^5.5.1",
+    "lodash": "^4.17.15",
+    "mongodb": "^3.5.5",
+    "mongoose": "^5.9.5"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.149",
+    "@types/mongodb": "^3.5.2",
+    "@types/mongoose": "^5.7.6",
+    "typescript": "^3.8.3"
+  }
+}
