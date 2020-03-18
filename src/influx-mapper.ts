@@ -4,27 +4,51 @@ import {InfluxDB} from "influx";
 let INSTANCE: InfluxMapper;
 
 export class InfluxMapper {
-    private config: DB_CONFIG;
+    private _config: DB_CONFIG;
     private _connection: InfluxDB;
+    private _tags: string[];
+    private _fields: string[];
 
     constructor(config: DB_CONFIG) {
-        this.config = config;
+        this._config = config;
         this._connection = this.connect();
+        this._tags = [];
+        this._fields = [];
+    }
+
+    get config(): DB_CONFIG {
+        return this._config;
+    }
+
+    get connection(): InfluxDB {
+        return this._connection;
+    }
+
+    get tags(): string[] {
+        return this._tags;
+    }
+
+    set tags(value: string[]) {
+        this._tags = value;
+    }
+
+    get fields(): string[] {
+        return this._fields;
+    }
+
+    set fields(value: string[]) {
+        this._fields = value;
     }
 
     connect() {
         return new InfluxDB({
             hosts: [
-                {host: this.config.host}
+                {host: this._config.host}
             ],
-            username: this.config.user,
-            password: this.config.password,
-            database: this.config.database,
+            username: this._config.user,
+            password: this._config.password,
+            database: this._config.database,
         });
-    }
-
-    get connection(): InfluxDB {
-        return this._connection;
     }
 }
 
@@ -35,4 +59,24 @@ export function influxMapper(config: DB_CONFIG): InfluxMapper {
 
 export function getConnection() {
     return INSTANCE.connection;
+}
+
+export function getConfig(): DB_CONFIG {
+    return INSTANCE.config;
+}
+
+export function setTag(tag: string[]) {
+    INSTANCE.tags = tag;
+}
+
+export function getTag() {
+    return INSTANCE.tags;
+}
+
+export function setField(filed: string[]) {
+    INSTANCE.fields = filed;
+}
+
+export function getField() {
+    return INSTANCE.fields;
 }
