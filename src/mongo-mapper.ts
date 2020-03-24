@@ -38,6 +38,15 @@ export class MongoMapper {
         this._model = this._mongoose.model(collection, schema);
     }
 
+    getSchemaPaths(schema: mongoose.Schema) {
+        let paths: string[] = [];
+        schema.eachPath((key) => {
+            paths.push(key);
+        });
+
+        return paths;
+    }
+
     get connection(): any {
         return this._connection;
     }
@@ -71,4 +80,8 @@ export function getModel(): mongoose.Model<any> | null {
 
 export function getSchema(): mongoose.Schema<any> | null {
     return INSTANCE.schema;
+}
+
+export function getSchemaPaths(schema: mongoose.Schema) {
+    return INSTANCE.getSchemaPaths(schema);
 }

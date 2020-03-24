@@ -8,12 +8,14 @@ export class InfluxMapper {
     private _connection: InfluxDB;
     private _tags: string[];
     private _fields: string[];
+    private _measurement: string;
 
     constructor(config: DB_CONFIG) {
         this._config = config;
         this._connection = this.connect();
         this._tags = [];
         this._fields = [];
+        this._measurement = "defaults";
     }
 
     get config(): DB_CONFIG {
@@ -38,6 +40,14 @@ export class InfluxMapper {
 
     set fields(value: string[]) {
         this._fields = value;
+    }
+
+    get measurement(): string {
+        return this._measurement;
+    }
+
+    set measurement(value: string) {
+        this._measurement = value;
     }
 
     connect() {
@@ -79,4 +89,12 @@ export function setField(filed: string[]) {
 
 export function getField() {
     return INSTANCE.fields;
+}
+
+export function setMeasurement(measurement: string) {
+    INSTANCE.measurement = measurement;
+}
+
+export function getMeasurement() {
+    return INSTANCE.measurement;
 }

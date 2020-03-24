@@ -4,19 +4,17 @@ import _ from 'lodash';
 import {InfluxDB, IPoint} from "influx";
 import {Model} from "mongoose";
 
-const DEFAULT_BATCH_SIZE: number = 20;
+const DEFAULT_BATCH_SIZE: number = 50;
 let INSTANCE: Migration;
 
 export class Migration {
     private _mongoModel: Model<any> | null;
     private _influxDb: InfluxDB;
-    private _batchSize: number;
     private documentCount: number;
 
     constructor() {
         this._mongoModel = mongodb.getModel();
         this._influxDb = influxdb.getConnection();
-        this._batchSize = DEFAULT_BATCH_SIZE;
         this.documentCount = 0;
     }
 
@@ -25,15 +23,19 @@ export class Migration {
         this._influxDb = influxdb.getConnection();
     }
 
-    async migrate(batchSize: number) {
+    async migrate(measurement: string, batchSize: number) {
         await this.init();
         await this.hasDatabaseOnInfluxDBIfNotExistCreate();
         await this.getDocumentCount();
         let iter = 0;
         while (1) {
-            await this.getDocuments(iter++, batchSize);
+            let documents = await this.getDocuments(measurement, iter++, batchSize);
+            if (!documents)
+                break;
+            await this.insertPoints(documents, measurement, iter++, batchSize);
             if (iter > this.documentCount / batchSize) break;
         }
+        return this.documentCount;
     }
 
     async hasDatabaseOnInfluxDBIfNotExistCreate() {
@@ -59,43 +61,51 @@ export class Migration {
         }
     }
 
-    async getDocuments(skip: number, limit: number) {
+    async getDocuments(measurement: string, skip: number, limit: number) {
+        let documents: any[] | null = null;
         if (this._mongoModel) {
-            let documents = await this._mongoModel.aggregate([{
+            documents = await this._mongoModel.aggregate([{
                     $skip: skip
                 }, {
                     $limit: limit
                 }]
                 , (err, documents) => {
                     if (err) {
-                        console.error('getDocuments error: ', (limit * (skip)), '~', (limit * (skip + 1)), err);
+                        console.error('FAIL!! FOUND AT MONGODB: ', (limit * (skip)), '~', (limit * (skip + 1)), err);
                     } else {
-                        console.log("SUCCESS FOUND: ", (limit * (skip)), '~', (limit * (skip + 1)));
+                        console.log('SUCCESS!! FOUND AT MONGODB: ', (limit * (skip)), '~', (limit * (skip + 1)));
                     }
                 });
-
-            if (documents) {
-                this._influxDb.writePoints(this.documents2Points(documents))
-                    .then(() => {
-                        console.log("SUCCESS INSERT: ", (limit * (skip)), '~', (limit * (skip + 1)));
-                    })
-                    .catch(err => {
-                        console.error('writePoints error');
-                    });
-            }
         } else {
             console.error("MONGO MODEL NOT FOUND");
         }
+        return documents;
     }
 
-    documents2Points(documents: any[]): IPoint[] {
+    async insertPoints(documents: any, measurement: string, skip: number, limit: number) {
+        return this._influxDb.writePoints(this.documents2Points(documents, measurement))
+            .then(() => {
+                console.log("SUCCESS!! INSERT: ", (limit * (skip)), '~', (limit * (skip + 1)));
+            })
+            .catch(err => {
+                console.error('FAIL!! INSERT: ', (limit * (skip)), '~', (limit * (skip + 1)));
+                process.exit(1);
+            });
+    }
+
+    documents2Points(documents: any[], measurement: string): IPoint[] {
         let points: IPoint[] = [];
+
         documents.forEach((document) => {
+            let tags = this.refine(document, {}, influxdb.getTag());
+            let fields = this.refine(document, {}, influxdb.getField());
+            let timestamp = new Date();
+
             const point: IPoint = {
-                measurement: 'processes',
-                tags: this.refine(document, influxdb.getTag()),
-                fields: this.refine(document, influxdb.getField()),
-                timestamp: new Date()
+                measurement: measurement,
+                tags: tags,
+                fields: fields,
+                timestamp: timestamp
             };
             points.push(point);
         });
@@ -103,18 +113,34 @@ export class Migration {
         return points;
     }
 
-    refine(document: any, entrySet: string[]): any {
-        let obj: any = {};
-        entrySet.forEach(entry => {
+    refine(document: any, obj: any, entrySet?: string[]): any {
+        let localEntrySet: string[] | undefined = entrySet;
+        if (!localEntrySet) {
+            localEntrySet = Object.keys(document);
+        }
+
+        localEntrySet.forEach(entry => {
             if (document.hasOwnProperty(entry)) {
-                obj[entry] = document[entry];
-                if (typeof document[entry] === 'object') {
-                    obj[entry] = JSON.parse(JSON.stringify(document[entry]));
+                if (_.isArray(document[entry])) {
+                    let list: any[] = [];
+                    document[entry].forEach((element) => {
+                        let iterObj = this.refine(element, {});
+                        list.push(iterObj);
+                    });
+                    obj[entry] = list;
+                } else if (typeof document[entry] === 'object') {
+                    obj[entry] = this.refine(document[entry], {});
+                } else {
+                    obj[entry] = document[entry];
                 }
             }
         });
 
         return obj;
+    }
+
+    async truncate() {
+        return await this._influxDb.query('DELETE FROM ' + influxdb.getConfig().database + ' WHERE time < now();');
     }
 }
 
@@ -123,9 +149,27 @@ export function init(): Migration {
     return INSTANCE;
 }
 
-export function migrate(batchSize?: number) {
+export function migrate(measurement?: string, truncate: boolean = false, batchSize?: number) {
+    if (typeof measurement === 'undefined') {
+        measurement = 'defaults';
+    }
+    influxdb.setMeasurement(measurement);
+
     if (typeof batchSize === 'undefined') {
         batchSize = DEFAULT_BATCH_SIZE
     }
-    INSTANCE.migrate(batchSize);
+
+    if (truncate) {
+        INSTANCE.truncate().then(() => {
+            console.log("SUCCESS TRUNCATE", influxdb.getConfig().database);
+        });
+    }
+
+    INSTANCE.migrate(measurement, batchSize).then((count) => {
+        console.log("SUCCESS MIGRATION :", count);
+    });
+}
+
+export function truncate() {
+    INSTANCE.truncate();
 }
