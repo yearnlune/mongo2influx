@@ -1,5 +1,8 @@
 import * as influxdb from './influx-mapper';
 import * as mongodb from './mongo-mapper';
+import * as migration from './migration';
+import {Types} from 'mongoose';
+import * as mongoose from "mongoose";
 
 mongodb.mongoMapper({
     host: process.env.MONGO_DB_HOST || "127.0.0.1",
